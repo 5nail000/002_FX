@@ -7,7 +7,7 @@ import numpy as np
 import time
 import pprint
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from read_reports import parse_html
 from draw_plots import plot_weekly_series, plot_weekly_balance
@@ -69,8 +69,11 @@ def process_deals(deals):
 
 
 def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date=None, end_date=None, multiplier=3000):
+    first_deposit = initial_balance
     balance = initial_balance
     balance_history = []
+    withdrawals = 0  # Initialize the withdrawals counter
+    deposits = 0  # Initialize the deposits counter
 
     # Convert start_date and end_date to datetime objects if they are not None and are strings
     if start_date is not None and isinstance(start_date, str):
@@ -110,11 +113,38 @@ def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_
             'Баланс': balance,
             'Размер серии': deal['Размер серии'],
             'Множитель': balance_ratio,
+            'Тип': 'сделка'
         })
 
-        # If the balance becomes negative, break the loop
-        if balance < 0:
-            break
+        # If balance is less than first_deposit, add a deposit
+        if balance < first_deposit:
+            deposit_date = deal_date + timedelta(seconds=5)
+            deposit_amount = first_deposit - balance
+            balance += deposit_amount
+            deposits += 1  # Increase the deposits counter
+            balance_history.append({
+                'Время': deposit_date.strftime('%Y.%m.%d %H:%M:%S'),
+                'Прибыль': deposit_amount,
+                'Баланс': balance,
+                'Размер серии': 0,
+                'Множитель': 0,
+                'Тип': 'пополнение'
+            })
+
+        # If balance_ratio exceeds 2 and balance exceeds first_deposit, add a withdrawal
+        # But only if the number of withdrawals is less than the number of deposits
+        if balance >= ((multiplier * 2) + first_deposit) and withdrawals < deposits:
+            withdrawal_date = deal_date + timedelta(seconds=5)
+            balance -= first_deposit
+            withdrawals += 1  # Increase the withdrawals counter
+            balance_history.append({
+                'Время': withdrawal_date.strftime('%Y.%m.%d %H:%M:%S'),
+                'Прибыль': -first_deposit,
+                'Баланс': balance,
+                'Размер серии': 0,
+                'Множитель': 0,
+                'Тип': 'снятие средств'
+            })
 
     return balance_history
 
@@ -127,9 +157,9 @@ processed_deals = process_deals(deals)
 plot_weekly_series(processed_deals, render_plot_file)
 
 initial_balance = 500
-drawdown_level = 7
-start_date = '01.02.2015'
-end_date = '01.01.2016'
+drawdown_level = 8
+start_date = '01.03.2017'
+end_date = '01.01.2024'
 multiplier = 500
 
 calculated_deals = recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date, end_date, multiplier)
@@ -137,6 +167,6 @@ render_plot_file = 'files/weekly_recalculated_balance_h1.png'
 plot_weekly_balance(calculated_deals, render_plot_file)
 
 # pp.pprint(processed_deals[-1])
-pp.pprint(calculated_deals)
+# pp.pprint(calculated_deals)
 pp.pprint(calculated_deals[-1]['Баланс'])
 pp.pprint(len(calculated_deals))
