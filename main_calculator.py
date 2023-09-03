@@ -17,6 +17,19 @@ from draw_plots import plot_weekly_series, plot_weekly_balance
 pp = pprint.PrettyPrinter(indent=2)
 
 
+def calculate_risk_and_split_balance(balance, risk_manage):
+    if risk_manage is None:
+        return 1, balance, 0  # If no risk level is provided, return 100% risk and all balance is risky
+
+    sorted_risk_levels = sorted(risk_manage.keys(), reverse=True)
+    for level in sorted_risk_levels:
+        if balance >= level:
+            risk_percent = risk_manage[level] / 100
+            risky_balance = balance * risk_percent
+            buffer_balance = balance - risky_balance
+            return risk_percent, risky_balance, buffer_balance
+
+
 def process_deals(deals):
     processed_deals = []
     drawdown = 0
@@ -69,7 +82,7 @@ def process_deals(deals):
     return processed_deals
 
 
-def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date=None, end_date=None, multiplier=3000):
+def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date=None, end_date=None, multiplier=3000, risk_manage=None):
     first_deposit = initial_balance
     balance = initial_balance
     balance_history = []
@@ -99,20 +112,26 @@ def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_
         else:
             loss = deal['Прибыль']
 
-        # Apply multiplier based on balance
-        balance_ratio = balance / multiplier
+        # Calculate risk and split balance
+        risk_percent, risky_balance, buffer_balance = calculate_risk_and_split_balance(balance, risk_manage)
+
+        # Apply multiplier based on risky balance instead of total balance
+        balance_ratio = risky_balance / multiplier
         balance_ratio = max(math.floor(balance_ratio), 1)
         loss *= balance_ratio
 
         # Calculate the new balance after the deal
-        last_positive_balance = balance  # Save the last positive balance before changing it
-        balance += loss
+        last_positive_balance = risky_balance  # Save the last positive risky balance before changing it
+        risky_balance += loss
         balance_change = loss
 
-        # If balance is negative, set it to zero and adjust balance_change to be the negative of the last positive balance
-        if balance < 0:
+        # If risky balance is negative, set it to zero and adjust balance_change to be the negative of the last positive balance
+        if risky_balance < 0:
             balance_change = -last_positive_balance
-            balance = 0  # Reset balance to zero
+            risky_balance = 0  # Reset risky balance to zero
+
+        # Recalculate the total balance by summing risky and buffer balances
+        balance = risky_balance + buffer_balance
 
         balance_history.append({
             'Время': deal['Время'],
@@ -167,17 +186,6 @@ def count_series_size(processed_deals):
     return series_size_count
 
 
-def calculate_risk_and_split_balance(balance, risk_manage):
-    sorted_risk_levels = sorted(risk_manage.keys(), reverse=True)
-    for level in sorted_risk_levels:
-        if balance >= level:
-            risk_percent = risk_manage[level] / 100
-            risky_balance = balance * risk_percent
-            buffer_balance = balance - risky_balance
-            return risk_percent, risky_balance, buffer_balance
-    return 1, balance, 0  # If no risk level is satisfied, return 100% risk and all balance is risky
-
-
 def save_to_excel(data, filename):
     df = pd.DataFrame(data)  # Создаем DataFrame из списка словарей
     df.to_excel(filename, index=False, startrow=2)  # Записываем DataFrame в xlsx файл
@@ -196,9 +204,16 @@ drawdown_level = 8
 start_date = '01.01.2014'
 end_date = '01.01.2024'
 multiplier = 500
+risk_manage = {
+    0: 100,
+    15000: 50,
+    30000: 25,
+    90000: 12.5,
+    270000: 6.25,
+}
 
-calculated_deals = recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date, end_date, multiplier)
-render_plot_file = 'files/weekly_recalculated_balance_h1.png'
+calculated_deals = recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date, end_date, multiplier, risk_manage)
+render_plot_file = 'files/recalculated_balance_h1.png'
 plot_weekly_balance(calculated_deals, render_plot_file)
 save_to_excel(calculated_deals, 'files/calculated_deals.xlsx')
 

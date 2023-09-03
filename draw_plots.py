@@ -180,7 +180,7 @@ def plot_weekly_balance(processed_deals, output_file):
         week = month_changes[i]
         next_week = month_changes[i + 1] if i + 1 < len(month_changes) else len(all_weeks)
         label_x = (week + next_week) / 2
-        label_y = ax1.get_ylim()[0] - 7000
+        label_y = ax1.get_ylim()[0] - 700
         ax1.text(label_x, label_y, month_names[week_times[week].month - 1], ha='center', va='bottom', color='orange', fontsize=36)
 
 
