@@ -125,11 +125,21 @@ def plot_weekly_balance(processed_deals, output_file):
         week_finals[week] = last_known_balance
 
     # Create the plot
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(len(all_weeks) / 2, 6), gridspec_kw={'height_ratios': [3, 1]})
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(len(all_weeks) / 2, 30), gridspec_kw={'height_ratios': [8, 1]})
     # Adjust the subplots size
     plt.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.1)
 
-    ax1.plot(all_weeks, [week_finals[week] for week in all_weeks], linewidth=4)
+    ax1.plot(all_weeks, [week_finals[week] for week in all_weeks], linewidth=12)
+
+    ax1.title.set_fontsize(48)
+    ax1.xaxis.label.set_fontsize(48)
+    ax1.yaxis.label.set_fontsize(8)
+    ax1.tick_params(axis='x', labelsize=8)
+    ax1.tick_params(axis='y', labelsize=36)
+
+    ax2.xaxis.label.set_fontsize(48)
+    ax2.yaxis.label.set_fontsize(8)
+    ax2.tick_params(axis='x', labelsize=8)
 
     # Add labels and title
     ax1.set_title('Weekly Final Balance')
@@ -153,13 +163,16 @@ def plot_weekly_balance(processed_deals, output_file):
 
     # Add vertical lines for month and year changes
     for week in month_changes:
-        ax1.axvline(x=week, color='orange', linestyle='--', linewidth=1)
+        ax1.axvline(x=week, color='orange', linestyle='--', linewidth=2)
+        ax2.axvline(x=week, color='orange', linestyle='--', linewidth=2)
     for week in year_changes:
-        ax1.axvline(x=week, color='red', linestyle='--', linewidth=2)
+        ax1.axvline(x=week, color='red', linestyle='--', linewidth=4)
+        ax2.axvline(x=week, color='red', linestyle='--', linewidth=4)
 
     # Add year labels at year changes
     for week in year_changes:
-        ax1.text(week, max(value for value in week_finals.values() if value is not None) * 1.1, str(week_times[week].year), ha='center', va='top', color='red', fontsize=12)
+        ax1.text(week, max(value for value in week_finals.values() if value is not None) * 1.05, str(week_times[week].year), ha='center', va='top', color='red', fontsize=48)
+        ax2.text(week, max(value for value in week_finals.values() if value is not None) * 1.05, str(week_times[week].year), ha='center', va='top', color='red', fontsize=48)
 
     # Add month labels at month changes
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -167,24 +180,27 @@ def plot_weekly_balance(processed_deals, output_file):
         week = month_changes[i]
         next_week = month_changes[i + 1] if i + 1 < len(month_changes) else len(all_weeks)
         label_x = (week + next_week) / 2
-        label_y = 10
-        ax1.text(label_x, label_y, month_names[week_times[week].month - 1], ha='center', va='top', color='orange', fontsize=10)
+        label_y = ax1.get_ylim()[0] - 7000
+        ax1.text(label_x, label_y, month_names[week_times[week].month - 1], ha='center', va='bottom', color='orange', fontsize=36)
+
 
     # Create the histogram for deposit and withdrawal
     deposits = {week: sum(balances) for week, balances in week_to_deposits.items() if balances}
     withdrawals = {week: sum(balances) for week, balances in week_to_withdrawals.items() if balances}
-    ax2.bar(deposits.keys(), deposits.values(), color='green')
-    ax2.bar(withdrawals.keys(), withdrawals.values(), color='red')
+    ax2.bar(deposits.keys(), deposits.values(), color='red')
+    ax2.bar(withdrawals.keys(), withdrawals.values(), color='green')
     for week, value in deposits.items():
-        ax2.text(week, value, f'{value:.2f}', ha='center', va='bottom', fontsize=8)
+        ax2.text(week, value, f'{value:.2f}', ha='center', va='bottom', fontsize=48)
     for week, value in withdrawals.items():
-        ax2.text(week, value, f'{-value:.2f}', ha='center', va='top', fontsize=8)
+        ax2.text(week, value, f'{-value:.2f}', ha='center', va='top', fontsize=48)
 
     # Add total deposit and withdrawal amounts to the plot
-    total_deposit = sum(deposits.values())
+    total_deposit = sum(deposits.values()) + list(deposits.values())[0]
     total_withdrawal = sum(withdrawals.values())
-    ax1.text(0, max(value for value in week_finals.values() if value is not None) * 1.1, f'Total deposit: {total_deposit:.2f}', ha='left', va='top', color='green', fontsize=48)
-    ax1.text(0, max(value for value in week_finals.values() if value is not None) * 0.85, f'Total withdrawal: {-total_withdrawal:.2f}', ha='left', va='top', color='red', fontsize=48)
+    ax1.text(0, max(value for value in week_finals.values() if value is not None) * 1.1, f'Total deposit adds: {total_deposit:.2f}', ha='left', va='top', color='red', fontsize=96)
+    ax1.text(0, max(value for value in week_finals.values() if value is not None) * 1.0, f'Total withdrawal: {-total_withdrawal:.2f}', ha='left', va='top', color='green', fontsize=96)
+
+    ax2.set_xlim(ax1.get_xlim())
 
     # Save the plot
-    plt.savefig(output_file)
+    plt.savefig(output_file, dpi=15)

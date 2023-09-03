@@ -8,6 +8,7 @@ import time
 import pprint
 import math
 from datetime import datetime, timedelta
+import pandas as pd
 
 from read_reports import parse_html
 from draw_plots import plot_weekly_series, plot_weekly_balance
@@ -73,7 +74,7 @@ def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_
     balance = initial_balance
     balance_history = []
     withdrawals = 0  # Initialize the withdrawals counter
-    deposits = 0  # Initialize the deposits counter
+    deposits = 1  # Initialize the deposits counter
 
     # Convert start_date and end_date to datetime objects if they are not None and are strings
     if start_date is not None and isinstance(start_date, str):
@@ -104,8 +105,14 @@ def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_
         loss *= balance_ratio
 
         # Calculate the new balance after the deal
+        last_positive_balance = balance  # Save the last positive balance before changing it
         balance += loss
         balance_change = loss
+
+        # If balance is negative, set it to zero and adjust balance_change to be the negative of the last positive balance
+        if balance < 0:
+            balance_change = -last_positive_balance
+            balance = 0  # Reset balance to zero
 
         balance_history.append({
             'Время': deal['Время'],
@@ -149,24 +156,54 @@ def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_
     return balance_history
 
 
+def count_series_size(processed_deals):
+    series_size_count = {}
+    for deal in processed_deals:
+        series_size = deal['Размер серии']
+        if series_size in series_size_count:
+            series_size_count[series_size] += 1
+        else:
+            series_size_count[series_size] = 1
+    return series_size_count
+
+
+def calculate_risk_and_split_balance(balance, risk_manage):
+    sorted_risk_levels = sorted(risk_manage.keys(), reverse=True)
+    for level in sorted_risk_levels:
+        if balance >= level:
+            risk_percent = risk_manage[level] / 100
+            risky_balance = balance * risk_percent
+            buffer_balance = balance - risky_balance
+            return risk_percent, risky_balance, buffer_balance
+    return 1, balance, 0  # If no risk level is satisfied, return 100% risk and all balance is risky
+
+
+def save_to_excel(data, filename):
+    df = pd.DataFrame(data)  # Создаем DataFrame из списка словарей
+    df.to_excel(filename, index=False, startrow=2)  # Записываем DataFrame в xlsx файл
+
+
 history_file = 'files/test_h1.html'
 render_plot_file = 'files/weekly_series_sizes_h1.png'
 
 deals = parse_html(history_file)
 processed_deals = process_deals(deals)
+count_series = count_series_size(processed_deals)
 plot_weekly_series(processed_deals, render_plot_file)
 
 initial_balance = 500
 drawdown_level = 8
-start_date = '01.03.2017'
+start_date = '01.01.2014'
 end_date = '01.01.2024'
 multiplier = 500
 
 calculated_deals = recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date, end_date, multiplier)
 render_plot_file = 'files/weekly_recalculated_balance_h1.png'
 plot_weekly_balance(calculated_deals, render_plot_file)
+save_to_excel(calculated_deals, 'files/calculated_deals.xlsx')
 
 # pp.pprint(processed_deals[-1])
 # pp.pprint(calculated_deals)
 pp.pprint(calculated_deals[-1]['Баланс'])
 pp.pprint(len(calculated_deals))
+# pp.pprint(count_series)
