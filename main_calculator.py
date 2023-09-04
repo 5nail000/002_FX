@@ -239,48 +239,63 @@ def save_to_excel(data, filename):
     df.to_excel(filename, index=False, startrow=2)  # Записываем DataFrame в xlsx файл
 
 
-history_file = 'files/reports/ReportTester-GBP_H1.html'
-render_plot_file = 'files/weekly_series_sizes_h1.png'
+def chek_calculates(calc_params, history_file, label):
 
-deals = parse_html(history_file)
-processed_deals = process_deals(deals)
-count_series = count_series_size(processed_deals)
-# plot_weekly_series(processed_deals, render_plot_file)
-save_to_excel(processed_deals, 'files/deals_orig_gbp.xlsx')
+    risk_manage = {
+        0: 100,
+        15000: 50,
+        45000: 25,
+        135000: 12.5,
+        405000: 6.25,
+    }
 
-risk_manage = {
-    0: 100,
-    15000: 50,
-    45000: 25,
-    135000: 12.5,
-    405000: 6.25,
-}
+    profit_mineing = {
+        45000: 10,
+        135000: 20,
+    }
 
-profit_mineing = {
-    45000: 10,
-    135000: 20,
-}
+    deals = parse_html(history_file)
+    processed_deals = process_deals(deals)
+    count_series = count_series_size(processed_deals)
+    save_to_excel(processed_deals, f'files/{label}_orig.xlsx')
 
-initial_balance = 500
-drawdown_level = 8
-start_date = '01.01.2014'
-end_date = '01.01.2024'
-multiplier = initial_balance
+    start_date = '01.01.2014'
+    end_date = '01.01.2024'
 
-calculated_deals = recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date, end_date, multiplier, risk_manage, profit_mineing)
-render_plot_file = 'files/recalculated_balance_gbp_h1.png'
-plot_weekly_balance(calculated_deals, render_plot_file)
-save_to_excel(calculated_deals, 'files/deals_calculated_gbp.xlsx')
-incomes = count_income(calculated_deals)
+    for current_params in calc_params:
+        multiplier = current_params['initial_balance']
+        label2 = f"{current_params['drawdown_level']:02d}_{current_params['initial_balance']}"
+        calculated_deals = recalculate_balance(processed_deals, current_params['initial_balance'], current_params['drawdown_level'], start_date, end_date, multiplier, risk_manage, profit_mineing)
+        render_plot_file = f'files/{label}_{label2}.png'
+        plot_weekly_balance(calculated_deals, render_plot_file)
+        save_to_excel(calculated_deals, f'files/{label}_{label2}.xlsx')
+        incomes = count_income(calculated_deals)
 
-# pp.pprint(processed_deals[-1])
-# pp.pprint(calculated_deals)
+        print('=====================')
+        print(f'initial_balance: {current_params["initial_balance"]}')
+        print(f'drawdown_level: {current_params["drawdown_level"]}')
+        print('=====================')
+        print('Годовой доход:')
+        pp.pprint(incomes['annual_income'])
+        print(f'Средний годовой доход: {int(incomes["average_annual_income"])}')
+        print(f'Итоговый баланс: {calculated_deals[-1]["Баланс"]}')
+        print(f'Количество трейдов: {len(calculated_deals)}\n')
 
-print('\n Распределение серий:')
-pp.pprint(count_series)
-print('\n Годовой доход:')
-pp.pprint(incomes['annual_income'])
-print(f'\n Средний годовой доход: {int(incomes["average_annual_income"])}')
+    print('Распределение серий:')
+    pp.pprint(count_series)
 
-print(f'\n Итоговый баланс: {calculated_deals[-1]["Баланс"]}')
-print(f'\n Количество трейдов: {len(calculated_deals)}\n')
+
+def main():
+    label = 'GBP_H1_ma8_s35_p50'
+    history_file = 'files/reports/GBP_H1_ma8_s35_p50.html'
+    calc_params = [
+        {'initial_balance': 500, 'drawdown_level': 8},
+        {'initial_balance': 1000, 'drawdown_level': 9},
+        {'initial_balance': 2000, 'drawdown_level': 10},
+        {'initial_balance': 4000, 'drawdown_level': 11},
+        ]
+    chek_calculates(calc_params, history_file, label)
+
+
+if __name__ == '__main__':
+    main()
