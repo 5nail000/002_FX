@@ -8,6 +8,7 @@ import time
 import pprint
 import math
 from datetime import datetime, timedelta
+from collections import defaultdict
 import pandas as pd
 
 from read_reports import parse_html
@@ -82,7 +83,7 @@ def process_deals(deals):
     return processed_deals
 
 
-def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date=None, end_date=None, multiplier=3000, risk_manage=None):
+def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date=None, end_date=None, multiplier=3000, risk_manage=None, profit_mining=None):
     first_deposit = initial_balance
     balance = initial_balance
     balance_history = []
@@ -133,13 +134,24 @@ def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_
         # Recalculate the total balance by summing risky and buffer balances
         balance = risky_balance + buffer_balance
 
+        # Calculate profit mining
+        profit_mining_deduction = 0
+        if profit_mining is not None:
+            for level in sorted(profit_mining.keys(), reverse=True):
+                if balance >= level and balance_change > 0:
+                    profit_mining_deduction = balance_change * profit_mining[level] / 100
+                    balance_change -= profit_mining_deduction
+                    balance -= profit_mining_deduction
+                    break
+
         balance_history.append({
             'Время': deal['Время'],
             'Прибыль': balance_change,
             'Баланс': balance,
             'Размер серии': deal['Размер серии'],
             'Множитель': balance_ratio,
-            'Тип': 'сделка'
+            'Тип': 'сделка',
+            'Сбор дохода': profit_mining_deduction,
         })
 
         # If balance is less than first_deposit, add a deposit
@@ -154,7 +166,8 @@ def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_
                 'Баланс': balance,
                 'Размер серии': 0,
                 'Множитель': 0,
-                'Тип': 'пополнение'
+                'Тип': 'пополнение',
+                'Сбор дохода': 0,
             })
 
         # If balance_ratio exceeds 2 and balance exceeds first_deposit, add a withdrawal
@@ -169,7 +182,8 @@ def recalculate_balance(processed_deals, initial_balance, drawdown_level, start_
                 'Баланс': balance,
                 'Размер серии': 0,
                 'Множитель': 0,
-                'Тип': 'снятие средств'
+                'Тип': 'снятие средств',
+                'Сбор дохода': 0,
             })
 
     return balance_history
@@ -186,39 +200,87 @@ def count_series_size(processed_deals):
     return series_size_count
 
 
+def count_income(balance_history):
+    monthly_income = defaultdict(float)  # A dictionary to hold monthly income
+    annual_income = defaultdict(float)  # A dictionary to hold annual income
+    total_income = 0.0  # A variable to hold the total income
+
+    # Go through each record in balance history
+    for record in balance_history:
+        # Parse the date
+        date = datetime.strptime(record['Время'], '%Y.%m.%d %H:%M:%S')
+        # Get the income
+        income = int(record['Сбор дохода'])
+        # Add the income to the appropriate month in the monthly income dictionary
+        month_key = (date.year, date.month)
+        monthly_income[month_key] += income
+        # Add the income to the appropriate year in the annual income dictionary
+        annual_income[date.year] += income
+        # Add the income to the total income
+        total_income += income
+
+    # Convert the keys in the monthly income dictionary to strings for readability
+    monthly_income = {(f'{year}-{month:02}'): income for (year, month), income in monthly_income.items()}
+
+    # Calculate average annual income, considering only years with non-zero income
+    non_zero_annual_incomes = [income for income in annual_income.values() if income != 0]
+    average_annual_income = sum(non_zero_annual_incomes) / len(non_zero_annual_incomes) if non_zero_annual_incomes else 0
+
+    return {
+        'monthly_income': dict(monthly_income),
+        'annual_income': dict(annual_income),
+        'average_annual_income': average_annual_income,
+        'total_income': total_income
+    }
+
+
 def save_to_excel(data, filename):
     df = pd.DataFrame(data)  # Создаем DataFrame из списка словарей
     df.to_excel(filename, index=False, startrow=2)  # Записываем DataFrame в xlsx файл
 
 
-history_file = 'files/test_h1.html'
+history_file = 'files/reports/ReportTester-GBP_H1.html'
 render_plot_file = 'files/weekly_series_sizes_h1.png'
 
 deals = parse_html(history_file)
 processed_deals = process_deals(deals)
 count_series = count_series_size(processed_deals)
-plot_weekly_series(processed_deals, render_plot_file)
+# plot_weekly_series(processed_deals, render_plot_file)
+save_to_excel(processed_deals, 'files/deals_orig_gbp.xlsx')
+
+risk_manage = {
+    0: 100,
+    15000: 50,
+    45000: 25,
+    135000: 12.5,
+    405000: 6.25,
+}
+
+profit_mineing = {
+    45000: 10,
+    135000: 20,
+}
 
 initial_balance = 500
 drawdown_level = 8
 start_date = '01.01.2014'
 end_date = '01.01.2024'
-multiplier = 500
-risk_manage = {
-    0: 100,
-    15000: 50,
-    30000: 25,
-    90000: 12.5,
-    270000: 6.25,
-}
+multiplier = initial_balance
 
-calculated_deals = recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date, end_date, multiplier, risk_manage)
-render_plot_file = 'files/recalculated_balance_h1.png'
+calculated_deals = recalculate_balance(processed_deals, initial_balance, drawdown_level, start_date, end_date, multiplier, risk_manage, profit_mineing)
+render_plot_file = 'files/recalculated_balance_gbp_h1.png'
 plot_weekly_balance(calculated_deals, render_plot_file)
-save_to_excel(calculated_deals, 'files/calculated_deals.xlsx')
+save_to_excel(calculated_deals, 'files/deals_calculated_gbp.xlsx')
+incomes = count_income(calculated_deals)
 
 # pp.pprint(processed_deals[-1])
 # pp.pprint(calculated_deals)
-pp.pprint(calculated_deals[-1]['Баланс'])
-pp.pprint(len(calculated_deals))
-# pp.pprint(count_series)
+
+print('\n Распределение серий:')
+pp.pprint(count_series)
+print('\n Годовой доход:')
+pp.pprint(incomes['annual_income'])
+print(f'\n Средний годовой доход: {int(incomes["average_annual_income"])}')
+
+print(f'\n Итоговый баланс: {calculated_deals[-1]["Баланс"]}')
+print(f'\n Количество трейдов: {len(calculated_deals)}\n')

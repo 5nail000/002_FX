@@ -183,7 +183,6 @@ def plot_weekly_balance(processed_deals, output_file):
         label_y = ax1.get_ylim()[0] - 700
         ax1.text(label_x, label_y, month_names[week_times[week].month - 1], ha='center', va='bottom', color='orange', fontsize=36)
 
-
     # Create the histogram for deposit and withdrawal
     deposits = {week: sum(balances) for week, balances in week_to_deposits.items() if balances}
     withdrawals = {week: sum(balances) for week, balances in week_to_withdrawals.items() if balances}
@@ -195,7 +194,10 @@ def plot_weekly_balance(processed_deals, output_file):
         ax2.text(week, value, f'{-value:.2f}', ha='center', va='top', fontsize=48)
 
     # Add total deposit and withdrawal amounts to the plot
-    total_deposit = sum(deposits.values()) + list(deposits.values())[0]
+    if deposits.values():
+        total_deposit = sum(deposits.values()) + list(deposits.values())[0]
+    else:
+        total_deposit = int(processed_deals[0]['Баланс']) - int(processed_deals[0]['Прибыль'])
     total_withdrawal = sum(withdrawals.values())
     ax1.text(0, max(value for value in week_finals.values() if value is not None) * 1.1, f'Total deposit adds: {total_deposit:.2f}', ha='left', va='top', color='red', fontsize=96)
     ax1.text(0, max(value for value in week_finals.values() if value is not None) * 1.0, f'Total withdrawal: {-total_withdrawal:.2f}', ha='left', va='top', color='green', fontsize=96)
